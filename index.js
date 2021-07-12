@@ -2,11 +2,12 @@ class TimersManager {
     constructor() {
         this.timers = [];
         this.timersQueue = [];
-        this.pauseTimers = [];
+        this.timersOnPause = [];
+        this._logCallbacks = [];
     }
 
     add(timer, ...args) {
-        if (!timer.name || !timer.name.length || timer.name !== "string") {
+        if (!timer.name || !timer.name.length || typeof timer.name !== "string") {
             throw new Error("Поле name содержит неверный тип, отсутствует или пустая строка")
         }
 
@@ -25,6 +26,7 @@ class TimersManager {
         if (typeof timer.job !== "function") {
             throw new Error("Поле job должно быть функцией")
         }
+        timer.args = args;
 
         this.timers.push(timer);
 
@@ -35,12 +37,26 @@ class TimersManager {
         console.log("start timers")
 
         this.timers.map(timer => {
-            let { name, delay, interval, job } = timer;
+            let { name, delay, interval, job, args } = timer;
+            const cb = () => this._log({ name, args, out: job(...args) });
 
-            const timerID = interval ? setInterval(job, delay) : setTimeout(job, delay);
+            const timerID = interval ? setInterval(cb, delay) : setTimeout(cb, delay);
 
             this.timersQueue.push({ name, timerID, interval, })
         })
+    }
+
+    _log({ name, args, out, }){
+        this._logCallbacks.push({
+            name,
+            args,
+            out,
+            created: Date.now()
+        })
+    }
+
+    print() {
+        console.log(this._logCallbacks);
     }
 
     startSimpleTimer(timer) {
@@ -87,14 +103,14 @@ class TimersManager {
             return;
         }
 
-        this.pauseTimers.push(timer);
+        this.timersOnPause.push(timer);
         this.timersQueue = this.filterTimerByName(this.timersQueue, timerName);
 
         console.log(`Таймер ${ timerName } поставлен на паузу`)
     }
 
     resume(timerName) {
-        const timer = this.pauseTimers.find(({ name }) => name === timerName);
+        const timer = this.timersOnPause.find(({ name }) => name === timerName);
 
         if (!timer) {
             console.log(`Запрашываемый таймер - ${ timerName } не найден`);
@@ -107,7 +123,7 @@ class TimersManager {
             interval: timer.interval,
         });
 
-        this.pauseTimers = this.filterTimerByName(this.pauseTimers, timerName);
+        this.timersOnPause = this.filterTimerByName(this.timersOnPause, timerName);
 
         console.log(` Таймер - ${ timerName } снова запущен`);
         console.log(this.timersQueue)
@@ -124,7 +140,7 @@ const t1 = {
     name: 't1',
     delay: 1000,
     interval: true,
-    job: () => { console.log('t1') }
+    job: (a, b) => a + b
 };
 
 const t2 = {
@@ -134,16 +150,19 @@ const t2 = {
     job: (a, b) => console.log("t2")
 };
 
-manager.add(t1).add(t2);
+manager.add(t1, 1, 2);
 
 manager.start();
 
+setInterval(() => {
+    console.log(manager.print())
+}, 1000)
 
-setTimeout(() => {
-    manager.pause("t2");
-}, 3000);
+// setTimeout(() => {
+//     manager.pause("t2");
+// }, 3000);
 
 
-setTimeout(() => {
-    manager.resume("t2");
-}, 6000);
+// setTimeout(() => {
+//     manager.resume("t2");
+// }, 6000);
